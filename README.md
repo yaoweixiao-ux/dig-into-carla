@@ -6,14 +6,14 @@ readthedocs
 * waiting...
 
 google group
-* disscuss-carla 'https://groups.google.com/g/disscuss-carla/settings'
+* [disscuss-carla](https://groups.google.com/g/disscuss-carla/settings)
 
 # Friendly tips
-* If "git clone" on github is too slow, pls try carla mirror.
+* If "git clone" on github is too slow, pls try carla [mirror](https://carla-ue5.readthedocs.io/en/latest/build_docker/).
 
-* If you have any questions, please feel free to ask in git issue.
+* If you have any questions, please feel free to ask in git [issue](https://github.com/carla-simulator/carla/issues).
 
-* If you need to add new documents or give suggestions, welcome to participate in git discussion.
+* If you need to add new documents or give suggestions, welcome to participate in git [discussion](https://github.com/carla-simulator/carla/discussions).
 
 # Table of Contents
 
