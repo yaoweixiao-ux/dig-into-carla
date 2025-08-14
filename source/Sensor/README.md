@@ -25,6 +25,4 @@ UCLASS(Abstract, hidecategories = (Collision, Attachment, Actor))
 class CARLA_API ASensor : public AActor
 ```
 
-![1755079178391](images/README/1755079178391.png)
-
 可以通过在UE 中创建C++类的方式生成sensor.h和sensor.cpp，点击创建类即可。
