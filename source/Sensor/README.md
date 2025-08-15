@@ -27,7 +27,6 @@ class CARLA_API ASensor : public AActor
 
 可以通过在UE 中创建C++类的方式生成sensor.h和sensor.cpp，点击创建类即可。
 
-
 ### 传感器数据流
 
 SceneCaptureCamera{.cpp .h}
