@@ -24,6 +24,25 @@ LibCarla源码在.../LibCarla/source/carla/rpc。
 
 ![1755225654172](images/README/1755225654172.png)
 
-RPC（Remote Procedure Call）—[远程过程调用](https://www.zhihu.com/search?q=%E8%BF%9C%E7%A8%8B%E8%BF%87%E7%A8%8B%E8%B0%83%E7%94%A8&search_source=Entity&hybrid_search_source=Entity&hybrid_search_extra=%7B%22sourceType%22%3A%22article%22%2C%22sourceId%22%3A%22334657641%22%7D)，它是一种通过网络从远程计算机程序上请求服务，而不需要了解底层[网络技术](https://zhida.zhihu.com/search?content_id=194107983&content_type=Article&match_order=1&q=%E7%BD%91%E7%BB%9C%E6%8A%80%E6%9C%AF&zhida_source=entity)的协议。
+RPC（Remote Procedure Call）—远程过程调用，它是一种通过网络从远程计算机程序上请求服务，而不需要了解底层网络技术的协议。
 
 ![1755225841732](images/README/1755225841732.png)
+
+
+### CARLA代码结构
+
+```cpp
+├── Build //编译时产生的文件夹，里面是编译安装的依赖工具
+├── Co-Simulation //联合仿真
+│      ├──PTV-Vissim //和 PTV-Vissim联合仿真
+│      └── Sumo //和 Sumo联合仿真
+├── Dist
+├── Docs //markdown说明文档
+├── Doxygen //如果安装了  Doxygen，使用 Doxygen生成的文档在这个文件夹
+├── Examples //使用CARLA's C++ API的例子
+├── Import //外部地图导入
+├── IlibCarla //carla和ue4交互
+├── PythonAPI //使用python实现的一些仿真例子
+├── Unreal //Carla Plugin
+└── Util //开发过程中使用的工具
+```

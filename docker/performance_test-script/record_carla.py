@@ -7,7 +7,7 @@ client = carla.Client('localhost', 2000)
 client.set_timeout(10.0)
 world = client.get_world()
 
-# 开启同步模式（关键！）
+# 开启同步模式
 settings = world.get_settings()
 settings.synchronous_mode = True
 settings.fixed_delta_seconds = 0.01  # 10ms 固定步长
