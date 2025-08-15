@@ -1,6 +1,8 @@
 ## 汽车动力学
 
-CARLA 0.9.14版本 采用UE 的 Chaos 引擎，由引擎求解轮胎力、悬架、动力学。
+CARLA 0.9.x版本采用UE 4.26 的PhysX引擎，由引擎求解轮胎力、悬架、动力学。
+
+CARLA 0.10.0版本 采用UE5.5 的 Chaos 引擎，由引擎求解轮胎力、悬架、动力学。
 
 CARSIM 接入只是将Chaos解析切换为Carsim求解轮胎力、悬架、动力学。
 
@@ -26,4 +28,4 @@ CARSIM 接入只是将Chaos解析切换为Carsim求解轮胎力、悬架、动�
 * VehicleVelocityControl.*
   定速控制
 
-CARLA负责将车辆的物理参数以及控制指令给到UE的chaos引擎，在引擎里进行动力学求解，最终作用到Actor的位置和旋转属性。
+CARLA负责将车辆的物理参数以及控制指令给到UE的PhysX引擎，在引擎里进行动力学求解，最终作用到Actor的位置和旋转属性。
