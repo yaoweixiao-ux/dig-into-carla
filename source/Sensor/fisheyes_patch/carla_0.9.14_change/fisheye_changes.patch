@@ -1,0 +1,288 @@
+*** Begin Patch
+*** Update File: Unreal/CarlaUE4/Plugins/Carla/Source/Carla/Sensor/FisheyeSensor.h
+@@
+   UFUNCTION(BlueprintCallable)
+-  uint32 GetImageWidth() const;
++  int32 GetImageWidth() const;
+@@
+   UFUNCTION(BlueprintCallable)
+-  uint32 GetImageHeight() const;
++  int32 GetImageHeight() const;
+@@
+   UPROPERTY(EditAnywhere)
+   float D4 = 0;
++
++  // Optional: cube render target face size to reduce GPU memory usage
++  UPROPERTY(EditAnywhere)
++  int32 CubeSize = 0; // if 0, defaults to image width
+
+*** End Patch
+
+*** Begin Patch
+*** Update File: Unreal/CarlaUE4/Plugins/Carla/Source/Carla/Sensor/FisheyeSensor.cpp
+@@
+-#include "Engine/TextureRenderTargetCube.h"
+-#include "Components/SceneCaptureComponentCube.h"
++#include "Engine/TextureRenderTargetCube.h"
++#include "Components/SceneCaptureComponentCube.h"
++#include "Runtime/RenderCore/Public/RenderingThread.h"
+@@
+ FActorDefinition AFisheyeSensor::GetSensorDefinition()
+ {
+   auto Definition = UActorBlueprintFunctionLibrary::MakeGenericSensorDefinition(
+       TEXT("camera"),
+       TEXT("fisheye"));
+
++  // Resolution (standard attribute names)
++  FActorVariation ResX;
++  ResX.Id = TEXT("image_size_x");
++  ResX.Type = EActorAttributeType::Int;
++  ResX.RecommendedValues = { TEXT("800") };
++  ResX.bRestrictToRecommended = false;
++
++  FActorVariation ResY;
++  ResY.Id = TEXT("image_size_y");
++  ResY.Type = EActorAttributeType::Int;
++  ResY.RecommendedValues = { TEXT("600") };
++  ResY.bRestrictToRecommended = false;
++
+   FActorVariation XSize;
+   XSize.Id = TEXT("x_size");
+   XSize.Type = EActorAttributeType::Float;
+   XSize.RecommendedValues = { TEXT("1000.0") };
+   XSize.bRestrictToRecommended = false;
+@@
+-  Definition.Variations.Append({ XSize, YSize, MaxAngle, Fx, Fy, Cx, Cy, D1, D2, D3, D4});
++  // Optional cube face size
++  FActorVariation Cube;
++  Cube.Id = TEXT("cube_size");
++  Cube.Type = EActorAttributeType::Int;
++  Cube.RecommendedValues = { TEXT("512") };
++  Cube.bRestrictToRecommended = false;
++
++  Definition.Variations.Append({ ResX, ResY, XSize, YSize, MaxAngle, Fx, Fy, Cx, Cy, D1, D2, D3, D4, Cube});
+
+   return Definition;
+ }
+@@
+ void AFisheyeSensor::Set(const FActorDescription &Description)
+ {
+   Super::Set(Description);
+
+-  XSize = UActorBlueprintFunctionLibrary::RetrieveActorAttributeToFloat(
+-      "x_size",
+-      Description.Variations,
+-      1000.0f);
+-
+-  YSize = UActorBlueprintFunctionLibrary::RetrieveActorAttributeToFloat(
+-      "y_size",
+-      Description.Variations,
+-      900.0f);
++  // Prefer standard image_size_* if provided, else fall back to x_size/y_size
++  const bool bHasImageX = Description.Variations.Contains(TEXT("image_size_x"));
++  const bool bHasImageY = Description.Variations.Contains(TEXT("image_size_y"));
++
++  if (bHasImageX) {
++    XSize = static_cast<float>(UActorBlueprintFunctionLibrary::RetrieveActorAttributeToInt(
++      TEXT("image_size_x"), Description.Variations, 800));
++  } else {
++    XSize = UActorBlueprintFunctionLibrary::RetrieveActorAttributeToFloat(
++      TEXT("x_size"), Description.Variations, 1000.0f);
++  }
++
++  if (bHasImageY) {
++    YSize = static_cast<float>(UActorBlueprintFunctionLibrary::RetrieveActorAttributeToInt(
++      TEXT("image_size_y"), Description.Variations, 600));
++  } else {
++    YSize = UActorBlueprintFunctionLibrary::RetrieveActorAttributeToFloat(
++      TEXT("y_size"), Description.Variations, 900.0f);
++  }
+@@
+   D4 = UActorBlueprintFunctionLibrary::RetrieveActorAttributeToFloat(
+       "d_4",
+       Description.Variations,
+       0.0f);
+
+-  CaptureRenderTarget -> SizeX = XSize;
++  CubeSize = UActorBlueprintFunctionLibrary::RetrieveActorAttributeToInt(
++      TEXT("cube_size"),
++      Description.Variations,
++      0);
++  CaptureRenderTarget -> SizeX = (CubeSize > 0 ? CubeSize : static_cast<int32>(XSize));
+ }
+@@
+-int32 AFisheyeSensor::GetImageWidth() const
++int32 AFisheyeSensor::GetImageWidth() const
+ {
+   check(CaptureRenderTarget != nullptr);
+-  return XSize;
++  return XSize;
+ }
+@@
+-int32 AFisheyeSensor::GetImageHeight() const
++int32 AFisheyeSensor::GetImageHeight() const
+ {
+   check(CaptureRenderTarget != nullptr);
+-  return YSize;
++  return YSize;
+ }
+@@
+ template <typename TSensor>
+ void AFisheyeSensor::SendPixelsInRenderThread(TSensor &Sensor, float MaxAngle, float SizeX, float SizeY, float Fx, float Fy, float Cx, float Cy, float D1, float D2, float D3, float D4)
+ {
+   TRACE_CPUPROFILER_EVENT_SCOPE(AFisheyeSensor::SendPixelsInRenderThread);
+   check(Sensor.CaptureRenderTarget != nullptr);
+
+   if (Sensor.IsPendingKill()) {
+     return;
+   }
+
+   UTextureRenderTargetCube *RenderTarget = Sensor.CaptureRenderTarget;
+
+   TArray64<uint8> PixelData;
+   FIntPoint Size;
+   EPixelFormat Format;
+
+   CubemapHelpersFisheye::FFisheyeParams FisheyeParams;
+   FisheyeParams.ImageSize = FIntPoint(SizeX, SizeY);
+   FisheyeParams.CameraMatrix = FVector4(Fx, Fy, Cx, Cy);
+   FisheyeParams.DistortionCoeffs = FVector4(D1, D2, D3, D4);
+   FisheyeParams.MaxAngle = MaxAngle;
+
+   // Must be called on game thread since it uses GameThread_GetRenderTargetResource internally
+   bool bUnwrapSuccess = CubemapHelpersFisheye::GenerateLongLatUnwrapFisheye(
+       RenderTarget, PixelData, FisheyeParams, Size, Format);
+
+   if (!bUnwrapSuccess) {
+     return;
+   }
+
+   auto Stream = Sensor.GetDataStream(Sensor);
+   auto Buffer = Stream.PopBufferFromPool();
+
+   Buffer.copy_from(
+     carla::sensor::SensorRegistry::get<TSensor *>::type::header_offset,
+     PixelData.GetData(),
+     PixelData.Num());
+
+   if (Buffer.data()) {
+     SCOPE_CYCLE_COUNTER(STAT_CarlaSensorStreamSend);
+     TRACE_CPUPROFILER_EVENT_SCOPE_STR("Stream Send");
+     Stream.Send(Sensor, std::move(Buffer));
+   }
+ }
+@@
+ void AFisheyeSensor::BeginPlay()
+ {
+
+-  CaptureRenderTarget-> Init(GetImageWidth(), PF_B8G8R8A8);
++  const int32 Face = (CubeSize > 0 ? CubeSize : static_cast<int32>(GetImageWidth()));
++  CaptureRenderTarget-> Init(Face, PF_B8G8R8A8);
+
+   Fisheye->Deactivate();
+   Fisheye->TextureTarget = CaptureRenderTarget;
+   Fisheye->CaptureScene();
+
+*** End Patch
+
+*** Begin Patch
+*** Update File: Unreal/CarlaUE4/Plugins/Carla/CarlaDependencies/include/carla/sensor/s11n/ImageSerializer.h
+@@
+   inline Buffer ImageSerializer::Serialize(const Sensor &sensor, Buffer &&bitmap) {
+     DEBUG_ASSERT(bitmap.size() > sizeof(ImageHeader));
+     ImageHeader header = {
+-      sensor.GetImageWidth(),
+-      sensor.GetImageHeight(),
++      static_cast<uint32_t>(sensor.GetImageWidth()),
++      static_cast<uint32_t>(sensor.GetImageHeight()),
+       sensor.GetFOVAngle()
+     };
+     std::memcpy(bitmap.data(), reinterpret_cast<const void *>(&header), sizeof(header));
+     return std::move(bitmap);
+   }
+
+*** End Patch
+
+*** Begin Patch
+*** Update File: LibCarla/source/carla/sensor/s11n/ImageSerializer.h
+@@
+   inline Buffer ImageSerializer::Serialize(const Sensor &sensor, Buffer &&bitmap) {
+     DEBUG_ASSERT(bitmap.size() > sizeof(ImageHeader));
+     ImageHeader header = {
+-      sensor.GetImageWidth(),
+-      sensor.GetImageHeight(),
++      static_cast<uint32_t>(sensor.GetImageWidth()),
++      static_cast<uint32_t>(sensor.GetImageHeight()),
+       sensor.GetFOVAngle()
+     };
+     std::memcpy(bitmap.data(), reinterpret_cast<const void *>(&header), sizeof(header));
+     return std::move(bitmap);
+   }
+
+*** End Patch
+
+*** Begin Patch
+*** Update File: PythonAPI/examples/manual_control.py
+@@
+-        # Optional fisheye material path can be passed via env
+-        # e.g. export CARLA_FISHEYE_MATERIAL="Material'/Game/Carla/Materials/M_Fisheye.M_Fisheye'"
+-        fisheye_mat = os.getenv('CARLA_FISHEYE_MATERIAL', '')
+-        fisheye_attrs = {'max_angle': '180.0'}
+-        if fisheye_mat:
+-            fisheye_attrs['fisheye_material'] = fisheye_mat
++        # Optional fisheye settings via env vars
++        # Example:
++        #   export CARLA_FISHEYE_MATERIAL="Material'/Game/Carla/Materials/M_Fisheye.M_Fisheye'"
++        #   export CARLA_FISHEYE_MAX_ANGLE=210
++        #   export CARLA_FISHEYE_D1=0.08309221636708493
++        #   export CARLA_FISHEYE_D2=0.01112126630599195
++        #   export CARLA_FISHEYE_D3=-0.008587261043925865
++        #   export CARLA_FISHEYE_D4=0.0008542188930970716
++        #   export CARLA_FISHEYE_FX=320
++        #   export CARLA_FISHEYE_FY=320
++        #   export CARLA_FISHEYE_CX=640
++        #   export CARLA_FISHEYE_CY=480
++        fisheye_mat = os.getenv('CARLA_FISHEYE_MATERIAL', '')
++        fisheye_attrs = {
++            'max_angle': os.getenv('CARLA_FISHEYE_MAX_ANGLE', '180.0'),
++            'd_1': os.getenv('CARLA_FISHEYE_D1', '0.0'),
++            'd_2': os.getenv('CARLA_FISHEYE_D2', '0.0'),
++            'd_3': os.getenv('CARLA_FISHEYE_D3', '0.0'),
++            'd_4': os.getenv('CARLA_FISHEYE_D4', '0.0'),
++            'f_x': os.getenv('CARLA_FISHEYE_FX', '300.0'),
++            'f_y': os.getenv('CARLA_FISHEYE_FY', '300.0'),
++            'c_x': os.getenv('CARLA_FISHEYE_CX', '600.0'),
++            'c_y': os.getenv('CARLA_FISHEYE_CY', '400.0'),
++        }
++        if fisheye_mat:
++            fisheye_attrs['fisheye_material'] = fisheye_mat
+
+*** End Patch
+
+*** Begin Patch
+*** Update File: PythonAPI/examples/fisheyes_demo.py
+@@
+-from queue import Queue
+-from queue import Empty
++from queue import Queue
++from queue import Empty
++from pathlib import Path
+@@
+-    try:
++    try:
++        # ensure output directory exists
++        Path('./fisheye_data').mkdir(parents=True, exist_ok=True)
+@@
+-        cam1_bp = None
+-        cam1_bp = world.get_blueprint_library().find('sensor.camera.fisheye')
+-        cam1_bp.set_attribute('x_size', str(1280))
+-        cam1_bp.set_attribute('y_size', str(720))
++        cam1_bp = None
++        cam1_bp = world.get_blueprint_library().find('sensor.camera.fisheye')
++        cam1_bp.set_attribute('image_size_x', str(1280))
++        cam1_bp.set_attribute('image_size_y', str(720))
++        # reduce GPU usage: smaller cube face + lower FPS
++        cam1_bp.set_attribute('cube_size', str(512))
++        cam1_bp.set_attribute('sensor_tick', str(0.05))
+*** End Patch
+
